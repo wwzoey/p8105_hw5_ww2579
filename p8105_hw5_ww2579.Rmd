@@ -58,7 +58,8 @@ Can I do a prop test for a single city?
 ```{r}
 prop.test(
   aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_unsolved),
-  aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull (hom_total))
+  aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull (hom_total)) %>%
+  broom::tidy()
 ```
 
 Try to iterate
@@ -75,4 +76,31 @@ results_df =
   select(city_state, estimate, conf.low, conf.high)
 ```
 
+## Problem 2
+
+Tidy and iterate over all csv files
+
+```{r}
+tidy = function(y) {
+  pivot_longer(
+    data = y,
+    week_1:week_8,
+    names_to = "week",
+    values_to = "value",
+    names_prefix = "week_") %>%
+  mutate(
+    week = as.factor(week))
+}
+
+path_df = 
+  tibble(
+  path = list.files("./lda_data")
+) %>%
+  mutate(path = str_c("lda_data/", path),
+         data = map(.x = path, ~read_csv(.x)),
+         tidied = map(.x = data, ~tidy(.x)))
+
+
+
+```
 
