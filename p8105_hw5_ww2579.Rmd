@@ -93,13 +93,13 @@ tidy = function(y) {
 }
 
 path_df = 
-  tibble(
-  path = list.files("./lda_data")
-) %>%
+  tibble(path = list.files("./lda_data")) %>%
   mutate(path = str_c("lda_data/", path),
          data = map(.x = path, ~read_csv(.x)),
          tidied = map(.x = data, ~tidy(.x)),
-         path = as.factor(path))
+         path = str_replace(path, "lda_data/exp_", "exp "),
+         path = str_replace(path, "lda_data/con_", "con "),
+         path = str_replace(path, ".csv",""))
 
 ```
 
@@ -114,8 +114,17 @@ plot = unnesting %>%
   ggplot(aes(x = week, y = value, color = path, group = path)) +
   geom_point() +
   geom_line() +
-  labs(title = "Con vs Exp over 8 weeks")
+  labs(title = "Con vs Exp over 8 weeks") +
+  ggsave("spaghetti_plot.pdf")
   
 ```
 
 Comments: The graph above shows observations of each subject (10 for control group, 10 for experimental group) over 8 weeks. It could be observed that in general, subjects from the experimental group have larger values of observation, compared to those from the control group. 
+
+
+## Problem 3
+
+```{r}
+
+```
+
