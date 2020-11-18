@@ -7,6 +7,7 @@ output: github_document
 
 ```{r setup}
 library(tidyverse)
+set.seed(1)
 
 knitr::opts_chunk$set(
   fig.width = 12,
@@ -58,7 +59,7 @@ Can I do a prop test for a single city?
 ```{r}
 prop.test(
   aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_unsolved),
-  aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull (hom_total)) %>%
+  aggregate_df %>% filter(city_state == "Baltimore_MD") %>% pull(hom_total)) %>%
   broom::tidy()
 ```
 
@@ -78,7 +79,7 @@ results_df =
 
 ## Problem 2
 
-Tidy and iterate over all csv files
+Read in data, tidy and iterate over all csv files.
 
 ```{r}
 tidy = function(y) {
@@ -97,8 +98,8 @@ path_df =
   mutate(path = str_c("lda_data/", path),
          data = map(.x = path, ~read_csv(.x)),
          tidied = map(.x = data, ~tidy(.x)),
-         path = str_replace(path, "lda_data/exp_", "exp "),
-         path = str_replace(path, "lda_data/con_", "con "),
+         path = str_replace(path, "lda_data/exp_", "experiment "),
+         path = str_replace(path, "lda_data/con_", "control "),
          path = str_replace(path, ".csv",""))
 
 ```
@@ -110,16 +111,16 @@ unnesting =
   path_df %>%
   unnest(tidied)
 
-plot = unnesting %>%
+lda_plot = unnesting %>%
   ggplot(aes(x = week, y = value, color = path, group = path)) +
   geom_point() +
   geom_line() +
   labs(title = "Con vs Exp over 8 weeks") +
-  ggsave("spaghetti_plot.pdf")
+  ggsave("lda_plot.pdf")
   
 ```
 
-Comments: The graph above shows observations of each subject (10 for control group, 10 for experimental group) over 8 weeks. It could be observed that in general, subjects from the experimental group have larger values of observation, compared to those from the control group. 
+Comments: The graph above shows observations on each subject (10 for control group, 10 for experimental group) over 8 weeks. It could be observed that in general, subjects from the experimental group have larger values of observation, compared to those from the control group. As we can see from the graph, the longitudinal lines of the control group are concentrated in the interval of -2.5 and 3.75; while the lines of the experimental group are roughly between 0 and 7.5.
 
 
 ## Problem 3
@@ -133,7 +134,7 @@ t.test(samp) %>%
   broom::tidy()
 ```
 
-t.test with 5000 datasets for different mu's 
+iterate one-sample t.test with 5000 datasets for different μ's
 
 ```{r}
 n = 30
@@ -149,38 +150,84 @@ sim = function(n = 30, mu, sigma = 5) {
     t.test(conf.level = 0.95, formula = samp~1) %>%
     broom::tidy()}
 
-sim_results = tibble(diff_mu = c(0,1,2,3,4,5,6)) %>%
-  mutate(output = 
-           map(.x = diff_mu, ~rerun(5000, sim(mu = .x))))
+
+sim_results = tibble(true_mu = c(0,1,2,3,4,5,6)) %>%
+  mutate(test_output = 
+           map(.x = true_mu, ~rerun(5000, sim(mu = .x))))
+```
+ 
+Testing the function `sim` when mu = 6
+
+```{r}
+sim(mu = 6)
 ```
 
-Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ on the x axis
+Make a plot showing the proportion of times the null was rejected (the power of the test).
 
 ```{r}
 t_test = unnest(unnest(sim_results)) %>%
-  mutate(diff_mu = as.factor(diff_mu))
+  mutate(true_mu = as.factor(true_mu))
+
 power_plot = 
   t_test %>%
   filter(p.value < 0.05) %>%
-  group_by(diff_mu) %>%
+  group_by(true_mu) %>%
   summarise(n_power = n()) %>%
-  mutate(prop_power = n_power/5000) %>%
-  ggplot(aes(x = diff_mu, y = prop_power, fill = diff_mu)) +
+  mutate(power = n_power/5000) %>%
+  ggplot(aes(x = true_mu, y = power, fill = true_mu)) +
   geom_col() +
   theme(legend.position = "none") +
   labs(title = "Power of Test",
        x = "True mu",
        y = "Proportion of Rejecting the Null") +
   ggsave("power_plot.pdf")
+
+power_plot
   
 ```
 
-Describe the association between effect size and power.
+Power and effect size are positively associated. Specifically, effect size here is the difference in μ (true μ - hypothesized μ). Since the hypothesized μ is 0, the effect size equals to the value of true μ. As we can see from the graph, the power increases along with the μ, and it reaches to 1 when μ equals to 5 or greater. 
 
 
-Make a plot showing the average estimate of μ^ on the y axis and the true value of μ on the x axis.
+Make a plot showing the average estimate of μ^.
 
 ```{r}
+avg_estimate = 
+  t_test %>%
+  group_by(true_mu) %>%
+  summarise(avg_estimate = mean(estimate))
+  
+avg_estimate_plot = 
+  avg_estimate %>%
+  ggplot(aes(x = true_mu, y = avg_estimate, fill = true_mu, group = true_mu)) +
+  geom_col() +
+  theme(legend.position = "none") +
+  labs(title = "Average Estimate",
+       x = "True mu",
+       y = "Average estimate of mu_hat ")
 
+avg_estimate_plot
 ```
 
+Make a second plot the average estimate of μ^ only in samples for which the null was rejected
+
+```{r}
+power_avg_estimate = 
+  t_test %>%
+  filter(p.value < 0.05) %>%
+  group_by(true_mu) %>%
+  summarise(power_avg_estimate = mean(estimate))
+
+power_avg_estimate_plot = 
+  power_avg_estimate %>%
+  ggplot(aes(x = true_mu, y = power_avg_estimate, fill = true_mu)) +
+  geom_col() +
+  theme(legend.position = "none") +
+  labs(title = "Average Estimate for Rejected Null",
+       x = "True mu",
+       y = "Average estimate of mu_hat ")
+
+power_avg_estimate_plot
+```
+
+The graph shows the values of the average estimates of μ^ only in samples for which the null was rejected. As the true μ increases from 1 to 6, the average estimate of μ^ gets closer to the true μ. This is because more samples for which the null was rejected are included with larger μ, which makes the average more approximately equal to the true μ.
